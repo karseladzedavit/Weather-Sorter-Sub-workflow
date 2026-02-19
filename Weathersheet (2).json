@@ -1,0 +1,150 @@
+{
+  "name": "Weathersheet",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://restcountries.com/v3.1/name/{{ $json.Country_names }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [816, 16],
+      "id": "ac7164f6-72fb-43f4-bf51-94c07660de9f",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "Country_names",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [208, 0],
+      "id": "94c09833-4005-4e44-b6c4-3c8d83038d0e",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "options": { "reset": false }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [416, 0],
+      "id": "d2dd2183-be3a-4e82-b540-5c936ec34fc3",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.open-meteo.com/v1/forecast?latitude={{ $json.latlng[0] }}&longitude={{ $json.latlng[1] }}&current_weather=true ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1024, 16],
+      "id": "cc6fa4e4-5f55-4cfe-9470-d701f9d320c3",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "let Capital = $('HTTP Request').first().json.capital[0]\nlet Temperature = $input.first().json.current_weather.temperature\nlet Last_updated =DateTime.fromISO($('Schedule Trigger').first().json.timestamp).setZone('Asia/Tbilisi').toFormat('yyyy-MM-dd HH:mm:ss') \n\nreturn {Capital : Capital, Temperature : Temperature, Last_updated : Last_updated}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1232, 16],
+      "id": "2d2fb94b-52c0-4c6d-b85a-2ccbf655c94d",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_MASTER_SPREADSHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Capital": "={{ $json.Capital }}",
+            "Temperature": "={{ $json.Temperature }}",
+            "Last_updated": "={{ $json.Last_updated }}",
+            "row_number": "={{ $itemIndex + 2 }}"
+          },
+          "matchingColumns": ["row_number"]
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [592, -192],
+      "id": "8083cd85-ae9b-46f1-8e6d-b13f63322da5",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "YOUR_CREDENTIAL_ID", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_MASTER_SPREADSHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [-64, 0],
+      "id": "4d1f22fc-b893-4b60-ae8d-d2064a929af4",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "YOUR_CREDENTIAL_ID", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 10 }] }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [-464, 0],
+      "id": "3d4b3331-14ed-421d-bf5f-76ae695e7ef7",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "workflowId": "YOUR_SUB_WORKFLOW_ID",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "{\n  \"Capital\": \"{{ $json.Capital }}\",\n  \"Temperature\": {{ $json.Temperature }}\n}"
+        },
+        "options": { "mode": "runOnceWithAllItems" }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [1072, -192],
+      "id": "e4782ea9-b857-4a1a-b598-46f2d84648bc",
+      "name": "Call 'Weather Sorter Sub-workflow'"
+    }
+  ],
+  "connections": {
+    "Loop Over Items": {
+      "main": [[{ "node": "Update row in sheet", "type": "main", "index": 0 }], [{ "node": "HTTP Request", "type": "main", "index": 0 }]]
+    },
+    "Update row in sheet": { "main": [[{ "node": "Call 'Weather Sorter Sub-workflow'", "type": "main", "index": 0 }]] },
+    "HTTP Request": { "main": [[{ "node": "HTTP Request1", "type": "main", "index": 0 }]] },
+    "HTTP Request1": { "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]] },
+    "Code in JavaScript": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
+    "Get row(s) in sheet": { "main": [[{ "node": "Split Out", "type": "main", "index": 0 }]] },
+    "Split Out": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
+    "Schedule Trigger": { "main": [[{ "node": "Get row(s) in sheet", "type": "main", "index": 0 }]] }
+  }
+}
